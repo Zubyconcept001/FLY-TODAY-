@@ -1,0 +1,27 @@
+// Add to functions/index.js
+exports.sendGateChangeNotification = functions.firestore
+  .document('flights/{flightId}')
+  .onUpdate(async (change, context) => {
+    const newData = change.after.data();
+    const oldData = change.before.data();
+    
+    if (newData.gate !== oldData.gate) {
+      // Get all bookings for this flight
+      const bookings = await db.collectionGroup('bookings')
+        .where('flightId', '==', context.params.flightId).get();
+      
+      bookings.forEach(doc => {
+        const token = doc.data().fcmToken;
+        if (token) {
+          admin.messaging().send({
+            token,
+            notification: {
+              title: 'Gate Change',
+              body: `${newData.flightNumber}: Gate changed to ${newData.gate}`
+            },
+            data: { pnr: doc.data().pnr }
+          });
+        }
+      });
+    }
+  });
